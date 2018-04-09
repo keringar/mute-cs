@@ -1,3 +1,4 @@
+extern crate failure;
 extern crate futures;
 extern crate hyper;
 extern crate serde;
@@ -25,10 +26,15 @@ impl Service for CSGOMute {
 
                 match serde_json::from_slice::<Value>(b.as_ref()) {
                     Ok(json) => {
-                        println!("{:?}", json);
+                        if let Err(_) = parse_json(json) {
+                            return Response::new()
+                                .with_status(StatusCode::BadRequest)
+                                .with_body(bad_request)
+                                .with_header(ContentLength(bad_request.len() as u64));
+                        }
 
                         Response::new().with_status(StatusCode::Ok)
-                    },
+                    }
                     Err(_) => Response::new()
                         .with_status(StatusCode::BadRequest)
                         .with_body(bad_request)
@@ -40,6 +46,12 @@ impl Service for CSGOMute {
             )),
         }
     }
+}
+
+fn parse_json(json: Value) -> Result<(), failure::Error> {
+    
+
+    Ok(())
 }
 
 fn main() {
