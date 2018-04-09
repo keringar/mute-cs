@@ -241,7 +241,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mute-csgo"
+name = "mute-cs"
 version = "0.1.0"
 dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
