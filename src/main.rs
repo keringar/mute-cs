@@ -1,63 +1,44 @@
+extern crate actix;
+extern crate actix_web;
+extern crate env_logger;
 extern crate failure;
-extern crate futures;
-extern crate hyper;
 extern crate serde;
 extern crate serde_json;
 
-use futures::prelude::*;
+use actix_web::{middleware, Application, HttpRequest, HttpResponse, Method, server::HttpServer};
 
-use hyper::{Post, StatusCode, header::ContentLength};
-use hyper::server::{Http, Request, Response, Service};
+use std::cell::Cell;
+use std::sync::Arc;
 
-use serde_json::Value;
+struct AppState {
+    counter: Arc<Cell<usize>>,
+}
 
-struct CSGOMute;
-
-impl Service for CSGOMute {
-    type Request = Request;
-    type Response = Response;
-    type Error = hyper::Error;
-    type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
-
-    fn call(&self, req: Self::Request) -> Self::Future {
-        match (req.method(), req.path()) {
-            (&Post, "/") => Box::new(req.body().concat2().map(|b| {
-                let bad_request: &[u8] = b"Missing Field";
-
-                match serde_json::from_slice::<Value>(b.as_ref()) {
-                    Ok(json) => {
-                        if let Err(_) = parse_json(json) {
-                            return Response::new()
-                                .with_status(StatusCode::BadRequest)
-                                .with_body(bad_request)
-                                .with_header(ContentLength(bad_request.len() as u64));
-                        }
-
-                        Response::new().with_status(StatusCode::Ok)
-                    }
-                    Err(_) => Response::new()
-                        .with_status(StatusCode::BadRequest)
-                        .with_body(bad_request)
-                        .with_header(ContentLength(bad_request.len() as u64)),
-                }
-            })),
-            _ => Box::new(futures::future::ok(
-                Response::new().with_status(StatusCode::NotFound),
-            )),
+impl AppState {
+    pub fn new() -> Self {
+        AppState {
+            counter: Arc::new(Cell::new(0)),
         }
     }
 }
 
-fn parse_json(json: Value) -> Result<(), failure::Error> {
-    
+fn index(req: HttpRequest<AppState>) -> HttpResponse {
+    req.state().counter.set(req.state().counter.get() + 1);
 
-    Ok(())
+    HttpResponse::Ok()
+        .body(format!("Number: {}", req.state().counter.get()))
+        .unwrap()
 }
 
 fn main() {
-    let addr = "127.0.0.1:37967".parse().unwrap();
+    ::std::env::set_var("RUST_LOG", "actix_web=info");
+    env_logger::init();
 
-    let server = Http::new().bind(&addr, || Ok(CSGOMute)).unwrap();
-    println!("Listening on http://{}", server.local_addr().unwrap());
-    server.run().unwrap();
+    HttpServer::new(|| {
+        Application::with_state(AppState::new())
+            .middleware(middleware::Logger::default())
+            .resource("/", |r| r.method(Method::GET).f(index))
+    }).bind("127.0.0.1:37967")
+        .expect("Could not bind to 127.0.0.1:37967")
+        .run();
 }
